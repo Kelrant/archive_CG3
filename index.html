@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Prog 2: Rasterization Shell</title>
+
+    <script type="text/javascript" src="gl-matrix-min.js"></script>
+    <script type="text/javascript" src="rasterize-v1.js"></script>
+  </head>
+
+  <body onload="main();">
+    <canvas id="myWebGLCanvas" width="512" height="512"></canvas>
+    <p>
+      PRESS F5 TO REFRESH&RESET
+    </p>
+    <p>
+      a and d — translate view left and right along view X<br>
+      w and s — translate view forward and backward along view Z<br>
+      q and e — translate view up and down along view Y<br>
+      A and D — rotate view left and right around view Y (yaw)<br>
+      W and S — rotate view forward and backward around view X (pitch)<br>
+    </p>
+    <p>
+      left and right — select and highlight the next/previous triangle set (previous off)<br>
+      up and down — select and highlight the next/previous ellipsoid (previous off)<br>
+      space — deselect and turn off highlight<br>
+    </p>
+    <p>
+      k and ; — translate selection left and right along view X<br>
+      o and l — translate selection forward and backward along view Z<br>
+      i and p — translate selection up and down along view Y<br>
+      K and : — rotate selection left and right around view Y (yaw)<br>
+      O and L — rotate selection forward and backward around view X (pitch)<br>
+      I and P — rotate selection clockwise and counterclockwise around view Z (roll)<br>
+    </p>
+  </body>
+</html>
