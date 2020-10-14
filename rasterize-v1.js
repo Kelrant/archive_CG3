@@ -72,7 +72,14 @@ var hl = 1.2;
 var dhl = 0.833;
 var highlight = [mat4.fromScaling(mat4.create(), vec3.fromValues(1.2, 1.2, 1.2)), mat4.fromScaling(mat4.create(), vec3.fromValues(0.833, 0.833, 0.833)), identity];
 var highlightModel = highlight[2];
-
+//elp index
+var elpVtxNum = 180*360*2;
+var elpIndexArray = [];
+var elpIndexBuffer;
+var modelMatrix;
+var viewMatrix;
+var inormalMatrix = mat4.create();
+var tinormalMatrix = mat4.create();
 
 
 // ASSIGNMENT HELPER FUNCTIONS
@@ -316,7 +323,16 @@ function loadEllipsoids(){
         gl.bindBuffer(gl.ARRAY_BUFFER, ElpNormBuffer[numEllipsoid]);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(inputEllipsoids[numEllipsoid].normArray), gl.STATIC_DRAW);
     }
-    
+    //index array
+    for (var i = 0; i < 180; i++){
+        for (var j = 0; j < 360; j++){
+            elpIndexArray.push(i*360+j);
+            elpIndexArray.push((i+1)*360+j);
+        }
+    }
+    elpIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elpIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(elpIndexArray), gl.STATIC_DRAW);
 }
 
 //useless
@@ -421,6 +437,7 @@ function loadTriangles() {
                 vtxsToAdd = inputTriangles[whichSet].material.specular;
                 vtxnToAdd = inputTriangles[whichSet].material.n;
                 vtxNormToAdd = inputTriangles[whichSet].normals[whichSetVert];
+                //new Vector(inputTriangles[whichSet].normals[whichSetVert].x, inputTriangles[whichSet].normals[whichSetVert].z, inputTriangles[whichSet].normals[whichSetVert].z);
                 vtxLightToAdd = Vector.normalize(new Vector(light[0]-vtxToAdd[0], light[1]-vtxToAdd[1], light[2]-vtxToAdd[2]));
                 view = Vector.normalize(new Vector(eye[0]-vtxToAdd[0], eye[1]-vtxToAdd[1], eye[2]-vtxToAdd[2]));
                 vtxHalfToAdd = Vector.normalize(Vector.add(vtxLightToAdd, view));
@@ -440,9 +457,9 @@ function loadTriangles() {
                 centerTri[whichSet][2] += vtxToAdd[2];
             } // end for vertices in set
             //calculate center
-            centerTri[whichSet][0] = centerTri[whichSet][0]/3;
-            centerTri[whichSet][1] = centerTri[whichSet][1]/3;
-            centerTri[whichSet][2] = centerTri[whichSet][2]/3;
+            centerTri[whichSet][0] = centerTri[whichSet][0]/inputTriangles[whichSet].vertices.length;
+            centerTri[whichSet][1] = centerTri[whichSet][1]/inputTriangles[whichSet].vertices.length;
+            centerTri[whichSet][2] = centerTri[whichSet][2]/inputTriangles[whichSet].vertices.length;
 
             // send the vertex coords to webGL
             //console.log('TRI normArray', inputTriangles[whichSet].normArray);
@@ -493,21 +510,20 @@ function setupShaders() {
         uniform mat4 uModelMatrix; // the model matrix
         uniform mat4 view; // the view matrix
         uniform mat4 projection;
+        uniform mat4 modelMatrix;
+        uniform mat4 viewMatrix;
         // Apply lighting effect
         attribute highp vec3 Norm;
         attribute highp vec3 Half;
         attribute highp vec3 Light;
         attribute highp float n;
-        // highp vec3 directionalLightColor = vec3(1, 1, 1); //white light
-        // highp vec3 directionalVector = vec3(-0.5 ,1.5, -0.5);
-        // highp vec3 Eye = vec3(0.5 ,0.5, -0.5);
 
         void main(void) {
             // position  
             gl_Position = projection * view * uModelMatrix * vec4(vertexPosition, 1.0);
             //color
-            float NdotL = dot(Norm, Light);
-            float NdotH = dot(Norm, Half);
+            float NdotL = dot(normalize(vec3(view * uModelMatrix * vec4(Norm, 0.0))), normalize(vec3(view * uModelMatrix * vec4(Light, 0.0))));
+            float NdotH = dot(normalize(vec3(view * uModelMatrix * vec4(Norm, 0.0))), normalize(vec3(view * uModelMatrix * vec4(Half, 0.0))));
             float maxNdotL = max(NdotL, 0.0);
             float maxNdotH = max(NdotH, 0.0);
             v_Color = vec4(ambient, 1.0) + vec4(diffuse * maxNdotL, 1.0) + vec4(specular * pow(maxNdotH, n), 1.0);
@@ -951,21 +967,35 @@ function renderWithKey(){
                           mat4.fromTranslation(mat4.create(), centerTri[whichTriSet]),
                           inputTriangles[whichTriSet].mMatrix);//translate back
             }
-            //rotate
-            mat4.multiply(inputTriangles[whichTriSet].mMatrix,
-                          mat4.fromRotation(mat4.create(), currentModelV3[1][whichTriSet][1], [1, 0, 0]),
-                          inputTriangles[whichTriSet].mMatrix);//x
-            mat4.multiply(inputTriangles[whichTriSet].mMatrix,
-                          mat4.fromRotation(mat4.create(), currentModelV3[1][whichTriSet][2], [0, 1, 0]),
-                          inputTriangles[whichTriSet].mMatrix);//y
-            mat4.multiply(inputTriangles[whichTriSet].mMatrix,
-                          mat4.fromRotation(mat4.create(), currentModelV3[1][whichTriSet][3], [0, 0, 1]),
-                          inputTriangles[whichTriSet].mMatrix);//z
+                        //rotate
+                        mat4.multiply(inputTriangles[whichTriSet].mMatrix,
+                            mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), centerTri[whichTriSet])),
+                            inputTriangles[whichTriSet].mMatrix);//translate to origin
+              mat4.multiply(inputTriangles[whichTriSet].mMatrix,
+                            mat4.fromRotation(mat4.create(), currentModelV3[1][whichTriSet][1], [1, 0, 0]),
+                            inputTriangles[whichTriSet].mMatrix);//x
+              mat4.multiply(inputTriangles[whichTriSet].mMatrix,
+                            mat4.fromRotation(mat4.create(), currentModelV3[1][whichTriSet][2], [0, 1, 0]),
+                            inputTriangles[whichTriSet].mMatrix);//y
+              mat4.multiply(inputTriangles[whichTriSet].mMatrix,
+                            mat4.fromRotation(mat4.create(), currentModelV3[1][whichTriSet][3], [0, 0, 1]),
+                            inputTriangles[whichTriSet].mMatrix);//z
+              mat4.multiply(inputTriangles[whichTriSet].mMatrix,
+                            mat4.fromTranslation(mat4.create(), centerTri[whichTriSet]),
+                            inputTriangles[whichTriSet].mMatrix);//translate back
+
             //translate
             mat4.multiply(inputTriangles[whichTriSet].mMatrix,
                           mat4.fromTranslation(mat4.create(), currentModelV3[1][whichTriSet][4]),
                           inputTriangles[whichTriSet].mMatrix);
-        
+
+        mat4.invert(inormalMatrix, inputTriangles[whichTriSet].mMatrix);
+        mat4.transpose(tinormalMatrix, inormalMatrix);
+        gl.uniformMatrix4fv(modelMatrix, false, tinormalMatrix);
+
+        mat4.invert(inormalMatrix, V);
+        mat4.transpose(tinormalMatrix, inormalMatrix);
+        gl.uniformMatrix4fv(viewMatrix, false, tinormalMatrix);
 
         // pass modeling matrix for set to shadeer
         gl.uniformMatrix4fv(modelMatrixULoc, false, inputTriangles[whichTriSet].mMatrix);
@@ -999,6 +1029,7 @@ function renderWithKey(){
         
         //find the highlight model 
         if (currentModelV3[0][0]==2 && currentModelV3[0][1]==whichElpSet) {
+
             //highlight
             mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
                           mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), centerElp[whichElpSet])),
@@ -1010,23 +1041,37 @@ function renderWithKey(){
                           mat4.fromTranslation(mat4.create(), centerElp[whichElpSet]),
                           inputEllipsoids[whichElpSet].mMatrix);//translate back
             }
-            //rotate
-            mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
-                          mat4.fromRotation(mat4.create(), currentModelV3[2][whichElpSet][1], [1, 0, 0]),
-                          inputEllipsoids[whichElpSet].mMatrix);//x
-            mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
-                          mat4.fromRotation(mat4.create(), currentModelV3[2][whichElpSet][2], [0, 1, 0]),
-                          inputEllipsoids[whichElpSet].mMatrix);//y
-            mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
-                          mat4.fromRotation(mat4.create(), currentModelV3[2][whichElpSet][3], [0, 0, 1]),
-                          inputEllipsoids[whichElpSet].mMatrix);//z
+                        //rotate
+                        mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
+                            mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), centerElp[whichElpSet])),
+                            inputEllipsoids[whichElpSet].mMatrix);//translate to origin
+              mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
+                            mat4.fromRotation(mat4.create(), currentModelV3[2][whichElpSet][1], [1, 0, 0]),
+                            inputEllipsoids[whichElpSet].mMatrix);//x
+              mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
+                            mat4.fromRotation(mat4.create(), currentModelV3[2][whichElpSet][2], [0, 1, 0]),
+                            inputEllipsoids[whichElpSet].mMatrix);//y
+              mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
+                            mat4.fromRotation(mat4.create(), currentModelV3[2][whichElpSet][3], [0, 0, 1]),
+                            inputEllipsoids[whichElpSet].mMatrix);//z
+              mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
+                              mat4.fromTranslation(mat4.create(), centerElp[whichElpSet]),
+                              inputEllipsoids[whichElpSet].mMatrix);//translate back
+
             //translate
             mat4.multiply(inputEllipsoids[whichElpSet].mMatrix,
                           mat4.fromTranslation(mat4.create(), currentModelV3[2][whichElpSet][4]),
                           inputEllipsoids[whichElpSet].mMatrix);
         
+        
 
+        mat4.invert(inormalMatrix, inputEllipsoids[whichElpSet].mMatrix);
+        mat4.transpose(tinormalMatrix, inormalMatrix);
+        gl.uniformMatrix4fv(modelMatrix, false, tinormalMatrix);
 
+        mat4.invert(inormalMatrix, V);
+        mat4.transpose(tinormalMatrix, inormalMatrix);
+        gl.uniformMatrix4fv(viewMatrix, false, tinormalMatrix);
 
         // pass modeling matrix for set to shadeer
         gl.uniformMatrix4fv(modelMatrixULoc, false, inputEllipsoids[whichElpSet].mMatrix);
@@ -1048,7 +1093,14 @@ function renderWithKey(){
         gl.vertexAttribPointer(Half, 3, gl.FLOAT, false, 9*FSIZE, 6*FSIZE);
 
         
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, vtxNum[whichElpSet]); // render
+        //gl.drawArrays(gl.TRIANGLE_FAN, 0, vtxNum[whichElpSet]); // render
+        // triangle buffer: activate and render
+        
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,elpIndexBuffer); // activate
+        // for(var offset = 0; offset < 180; offset++){
+        //     gl.drawElements(gl.TRIANGLE_STRIP, 2*360,gl.UNSIGNED_SHORT,2*360*offset); // render
+        // }
+        gl.drawElements(gl.LINE_STRIP, elpIndexArray.length,gl.UNSIGNED_SHORT,0); // render
     } // end for each tri set
 }
 
@@ -1056,7 +1108,7 @@ function renderWithKey(){
 function renderAllWithKey(){
     renderWithKey();
     var choice = 0;
-    document.addEventListener('keyup', function(e){
+    document.addEventListener('keydown', function(e){
         let key = e.key;
         
         switch(key){
@@ -1086,11 +1138,11 @@ function renderAllWithKey(){
                 console.log('e pressed');
                 break;
             case 'A': //A
-                mat4.multiply(V, mat4.fromRotation(mat4.create(), -Math.PI/180, vec3.fromValues(0, 1, 0)), V);
+                mat4.multiply(V, mat4.fromRotation(mat4.create(), Math.PI/180, vec3.fromValues(0, 1, 0)), V);
                 console.log('A pressed');
                 break;
             case 'D': //D
-                mat4.multiply(V, mat4.fromRotation(mat4.create(), Math.PI/180, vec3.fromValues(0, 1, 0)), V);
+                mat4.multiply(V, mat4.fromRotation(mat4.create(), -Math.PI/180, vec3.fromValues(0, 1, 0)), V);
                 console.log('D pressed');
                 break;
             case 'W': //W
@@ -1100,6 +1152,14 @@ function renderAllWithKey(){
             case 'S': //S
                 mat4.multiply(V, mat4.fromRotation(mat4.create(), Math.PI/180, vec3.fromValues(1, 0, 0)), V);
                 console.log('S pressed');
+                break;
+            case 'Q': //Q
+                mat4.multiply(V, mat4.fromRotation(mat4.create(), -Math.PI/180, vec3.fromValues(0, 0, 1)), V);
+                console.log('Q pressed');
+                break;
+            case 'E': //E
+                mat4.multiply(V, mat4.fromRotation(mat4.create(), Math.PI/180, vec3.fromValues(0, 0, 1)), V);
+                console.log('E pressed');
                 break;
             case 'ArrowLeft': //left
                 currentModelV3[0][0] = 1;
@@ -1147,12 +1207,12 @@ function renderAllWithKey(){
             case 'k': //k
                 //currentModelV3[0][0]: which set
                 //currentModelV3[0][1]: which obj
-                currentModelV3[currentModelV3[0][0]][currentModelV3[0][1]][4][0] += -0.01; 
+                currentModelV3[currentModelV3[0][0]][currentModelV3[0][1]][4][0] += 0.01; 
                 translationModel[0] += -0.01;
                 console.log('k pressed');
                 break;
             case ';': //;
-                currentModelV3[currentModelV3[0][0]][currentModelV3[0][1]][4][0] += 0.01;
+                currentModelV3[currentModelV3[0][0]][currentModelV3[0][1]][4][0] += -0.01;
                 translationModel[0] += 0.01;
                 console.log('; pressed');
                 break;
